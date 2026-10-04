@@ -10,8 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "Open Source Community" }
+    { name = "Aderali06" }
 ]
+urls = { Homepage = "https://github.com/Aderali06/sqlite-mcp-server", Repository = "https://github.com/Aderali06/sqlite-mcp-server.git", Issues = "https://github.com/Aderali06/sqlite-mcp-server/issues" }
 keywords = [
     "mcp",
     "model-context-protocol",

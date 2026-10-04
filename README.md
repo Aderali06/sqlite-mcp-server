@@ -1,55 +1,55 @@
 # sqlite-mcp-server
 
-Server [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) sumber terbuka berbasis Python untuk menghubungkan asisten kecerdasan buatan (seperti **Claude Desktop** dan **Cursor**) ke database **SQLite lokal** dengan keamanan tingkat tinggi (*strict read-only*), proteksi batas baris (*row limit*), serta respons galat terstruktur.
+An open-source [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server connecting LLM assistants (such as **Claude Desktop** and **Cursor**) to **local SQLite databases** with strict read-only security, context overflow protection, and structured AI error handling.
 
-[![CI](https://github.com/username/sqlite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/username/sqlite-mcp-server/actions)
+[![CI](https://github.com/Aderali06/sqlite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Aderali06/sqlite-mcp-server/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 ---
 
-## 🌟 Fitur Utama
+## 🌟 Key Features
 
-- **Otomatisasi Skema Database**: Alat untuk membaca daftar tabel, tipe objek (tabel/view), jumlah baris, indeks, kunci asing (*foreign keys*), dan definisi DDL secara otomatis.
-- **Validasi Kueri Hanya-Baca (*Strict Read-Only*)**:
-  - Pemeriksaan tingkat parser untuk menolak perintah modifikasi (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `VACUUM`, dan lain-lain).
-  - Penolakan *statement chaining* (mencegah injeksi multi-pernyataan via `;`).
-  - Penolakan PRAGMA berbahaya (`writable_schema`, manipulasi izin).
-  - Enkapsulasi koneksi SQLite dengan mode baca-saja tingkat mesin (`file:path?mode=ro` dan `PRAGMA query_only = ON;`).
-- **Proteksi Overflow Konteks (`max_rows`)**: Pemotongan baris otomatis dengan peringatan ramah AI agar kueri tabel berukuran besar tidak meluapkan *token context window* model LLM.
-- **Penanganan Galat Terstruktur untuk AI**: Format galat JSON yang konsisten (`error_type`, `message`, `query`, dan `suggestion`) membantu model AI mendiagnosis dan memperbaiki kueri secara mandiri tanpa halusinasi.
-- **Dukungan Penuh Protokol MCP**: Menyediakan **Tools**, **Resources** (URI skema langsung), dan **Prompts** (panduan analisis skema & asisten kueri aman).
-- **Kompatibilitas Fleksibel**: Dapat dikonfigurasi melalui argumen CLI (`--db-path`), variabel lingkungan (`SQLITE_DB_PATH`), atau ditentukan secara dinamis per pemanggilan alat (`db_path`).
+- **Automated Schema Discovery**: Automatically inspect table lists, object types (tables/views), row count estimates, columns, primary keys, foreign keys, and complete DDL definitions.
+- **Strict Read-Only Query Security**:
+  - **Parser-Level Validation**: Rejects all mutation statements (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `VACUUM`, `REINDEX`, etc.).
+  - **Statement Chaining Prevention**: Blocks execution of multiple chained statements separated by `;`.
+  - **Restricted PRAGMAs**: Prohibits dangerous PRAGMAs (`writable_schema`, permissions, and configuration mutation).
+  - **Engine-Level Enforcement**: SQLite connections are opened using read-only URI mode (`file:path?mode=ro`) with `PRAGMA query_only = ON;`.
+- **Context Overflow Protection (`max_rows`)**: Safely truncates large query results with an informative warning advising AI models to use `LIMIT` and `OFFSET` clauses.
+- **Structured Error Handling for AI**: Returns standardized JSON error envelopes (`error_type`, `message`, `query`, and `suggestion`) to allow AI models to self-correct queries without hallucinations.
+- **Full MCP Capabilities**: Exposes **Tools**, direct **Resources** (`sqlite://schema`, `sqlite://tables`), and guided **Prompts** (`schema_analysis`, `safe_query_assistant`).
+- **Flexible Configuration**: Set the database path via CLI argument (`--db-path`), environment variable (`SQLITE_DB_PATH`), or dynamically per tool invocation (`db_path`).
 
 ---
 
-## 🛠️ Alat MCP yang Disediakan (Tools)
+## 🛠️ MCP Tools
 
-| Nama Alat | Deskripsi | Argumen Utama |
+| Tool Name | Description | Key Arguments |
 | :--- | :--- | :--- |
-| `list_tables` | Menampilkan seluruh daftar tabel dan view beserta estimasi jumlah baris. | `db_path` *(opsional)* |
-| `describe_table` | Menampilkan struktur kolom, tipe data, kunci utama, kunci asing, dan indeks suatu tabel. | `table_name` *(wajib)*, `db_path` *(opsional)* |
-| `get_database_schema` | Menampilkan seluruh pernyataan `CREATE DDL` lengkap untuk semua objek database. | `db_path` *(opsional)* |
-| `read_query` | Mengeksekusi kueri `SELECT` atau `EXPLAIN` yang aman dan mengembalikan baris data terstruktur. | `query` *(wajib)*, `params` *(opsional)*, `max_rows` *(opsional, default: 1000)*, `db_path` *(opsional)* |
+| `list_tables` | Lists all tables and views in the database with estimated row counts. | `db_path` *(optional)* |
+| `describe_table` | Retrieves column definitions, data types, nullability, default values, primary keys, foreign keys, and indexes for a specific table. | `table_name` *(required)*, `db_path` *(optional)* |
+| `get_database_schema` | Returns the complete DDL schema definition for all tables, views, and indexes. | `db_path` *(optional)* |
+| `read_query` | Safely executes a read-only `SELECT` or `EXPLAIN` query and returns structured row records. | `query` *(required)*, `params` *(optional)*, `max_rows` *(optional, default: 1000)*, `db_path` *(optional)* |
 
 ---
 
-## 📦 Sumber Daya & Templat Prompt MCP (Resources & Prompts)
+## 📦 MCP Resources & Prompts
 
-### MCP Resources (Akses Konteks Langsung)
-Klien AI yang mendukung Resource dapat membaca konteks database tanpa memanggil tool:
-- `sqlite://schema`: Menampilkan seluruh DDL database terformat untuk pemahaman relasi antartabel.
-- `sqlite://tables`: Menampilkan ringkasan ringkas seluruh nama tabel, view, dan jumlah baris.
+### MCP Resources (Direct Context Access)
+Clients that support MCP Resources can inspect the database context directly without invoking a tool:
+- `sqlite://schema`: Returns the full formatted SQL DDL schema of the database.
+- `sqlite://tables`: Returns a concise list of all tables, views, and their respective row counts.
 
-### MCP Prompts (Panduan Interaktif AI)
-- `schema_analysis`: Meminta model AI meninjau arsitektur database, normalisasi data, serta peluang optimasi indeks.
-- `safe_query_assistant(user_goal)`: Membantu AI dan pengguna merancang kueri `SELECT` yang teroptimasi dengan klausul `LIMIT`/`OFFSET`.
+### MCP Prompts (Interactive Assistant Guides)
+- `schema_analysis`: Prompts the AI model to inspect database structure, relationships, normalization, and optimization opportunities.
+- `safe_query_assistant(user_goal)`: Guides the AI model in formulating an optimized, safe `SELECT` query tailored to the user's objective.
 
 ---
 
-## 📋 Struktur Galat Terstruktur (Structured Error Handling)
+## 📋 Structured Error Format
 
-Ketika terjadi kesalahan sintaks atau kueri yang dilarang, server mengembalikan format JSON yang ramah AI:
+When a syntax or validation error occurs, the server responds with a structured JSON object designed for LLM consumption:
 
 ```json
 {
@@ -61,54 +61,54 @@ Ketika terjadi kesalahan sintaks atau kueri yang dilarang, server mengembalikan 
 }
 ```
 
-Tipe galat yang didukung:
-- `DisallowedQueryError`: Kueri mencoba memodifikasi database atau menggunakan kata kunci terlarang.
-- `SyntaxError`: Galat sintaks SQL dari SQLite.
-- `TableNotFoundError`: Tabel yang diminta tidak ditemukan di database (dilengkapi saran memeriksa via `list_tables`).
-- `ColumnNotFoundError`: Kolom yang diminta tidak ada (dilengkapi saran memeriksa via `describe_table`).
-- `DatabaseNotFoundError`: Berkas SQLite tidak ditemukan pada jalur yang diberikan.
-- `DatabaseConfigError`: Jalur database belum ditentukan di argumen atau variabel lingkungan.
-- `ValidationError`: Parameter input (seperti nama tabel kosong atau `max_rows < 1`) tidak valid.
+Supported error categories:
+- `DisallowedQueryError`: Query attempts data modification or invokes forbidden SQL operations.
+- `SyntaxError`: SQLite syntax error.
+- `TableNotFoundError`: Table was not found (includes advice to run `list_tables`).
+- `ColumnNotFoundError`: Column was not found (includes advice to run `describe_table`).
+- `DatabaseNotFoundError`: Database file does not exist at the specified path.
+- `DatabaseConfigError`: No database path was provided or configured.
+- `ValidationError`: Invalid input parameter (e.g. empty table name or `max_rows < 1`).
 
 ---
 
-## 🚀 Panduan Instalasi & Penggunaan
+## 🚀 Installation & Getting Started
 
-### Opsi 1: Menjalankan Langsung via `uvx` (Direkomendasikan)
-Jika Anda menggunakan `uv` / `uvx`, Anda dapat menjalankan server tanpa perlu mengkloning repositori:
+### Option 1: Run with `uvx` (Recommended)
+If you have `uv` installed, run the server instantly without cloning:
 ```bash
-uvx sqlite-mcp-server --db-path "C:/path/ke/database.db"
+uvx sqlite-mcp-server --db-path "/path/to/database.db"
 ```
 
-### Opsi 2: Instalasi Manual via Git
+### Option 2: Install from Source
 ```bash
-# 1. Kloning repositori
-git clone https://github.com/username/sqlite-mcp-server.git
+# 1. Clone repository
+git clone https://github.com/Aderali06/sqlite-mcp-server.git
 cd sqlite-mcp-server
 
-# 2. Buat lingkungan virtual
+# 2. Create virtual environment
 python -m venv .venv
 
 # Windows
 .venv\Scripts\activate
-# Linux / macOS
+# macOS / Linux
 source .venv/bin/activate
 
-# 3. Pasang dependensi
+# 3. Install package and development dependencies
 pip install -e ".[dev]"
 ```
 
 ---
 
-## ⚙️ Konfigurasi Claude Desktop
+## ⚙️ Claude Desktop Configuration
 
-Tambahkan konfigurasi berikut ke berkas `claude_desktop_config.json`:
+Add the server to your `claude_desktop_config.json`:
 
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
-### Format Konfigurasi:
+### Configuration Example:
 
 ```json
 {
@@ -125,7 +125,7 @@ Tambahkan konfigurasi berikut ke berkas `claude_desktop_config.json`:
 }
 ```
 
-*Atau menggunakan Python lokal:*
+*Or using local Python:*
 ```json
 {
   "mcpServers": {
@@ -147,19 +147,19 @@ Tambahkan konfigurasi berikut ke berkas `claude_desktop_config.json`:
 
 ---
 
-## 💻 Integrasi pada Cursor
+## 💻 Cursor Integration
 
-### Metode 1: Melalui UI Pengaturan Cursor
-1. Buka **Cursor Settings** (`Ctrl + Shift + J` di Windows atau `Cmd + ,` di macOS).
-2. Pilih tab **Features** > **MCP Servers**.
-3. Klik **+ Add New MCP Server**.
-4. Masukkan parameter:
+### Method 1: Via Cursor Settings UI
+1. Open **Cursor Settings** (`Ctrl + Shift + J` on Windows/Linux or `Cmd + ,` on macOS).
+2. Navigate to **Features** > **MCP Servers**.
+3. Click **+ Add New MCP Server**.
+4. Fill in:
    - **Name**: `sqlite-mcp-server`
    - **Type**: `command`
-   - **Command**: `python -m src.server --db-path "C:/path/to/your/database.sqlite"`
+   - **Command**: `python -m src.server --db-path "C:/path/to/database.sqlite"`
 
-### Metode 2: Menggunakan Berkas Proyek (`.cursor/mcp.json`)
-Buat berkas `.cursor/mcp.json` di direktori proyek Anda:
+### Method 2: Project-Level Configuration (`.cursor/mcp.json`)
+Create `.cursor/mcp.json` in your project root:
 
 ```json
 {
@@ -179,60 +179,42 @@ Buat berkas `.cursor/mcp.json` di direktori proyek Anda:
 
 ---
 
-## 🌐 Panduan Masuk ke MCP Registry GitHub
+## 🧪 Testing
 
-Proyek ini telah memenuhi seluruh kriteria untuk didaftarkan ke registri ekosistem Model Context Protocol resmi ([`modelcontextprotocol/servers`](https://github.com/modelcontextprotocol/servers)).
-
-### Langkah Pendaftaran:
-1. **Push ke GitHub**: Unggah repositori ini ke akun GitHub publik Anda.
-2. **Publikasikan ke PyPI** (opsional namun sangat disarankan):
-   - Gunakan workflow terintegrasi [`.github/workflows/publish.yml`](.github/workflows/publish.yml) dengan membuat rilis baru (Release) atau tag versi `v0.1.0`.
-3. **Kirim Pull Request ke `modelcontextprotocol/servers`**:
-   - Fork repositori `modelcontextprotocol/servers`.
-   - Tambahkan entri server ke berkas `README.md` pada kategori **Database**:
-     ```markdown
-     - [sqlite-mcp-server](https://github.com/username/sqlite-mcp-server) - Safe, read-only SQLite MCP server with auto schema discovery and structured AI error handling.
-     ```
-   - Buat Pull Request dengan judul: `Add sqlite-mcp-server to community servers`.
-
----
-
-## 🧪 Pengujian Otomatis
-
-Jalankan rangkaian pengujian unit dan integrasi dengan `pytest`:
+Run the automated test suite with `pytest`:
 
 ```bash
-# Jalankan seluruh tes
+# Run all tests
 pytest
 
-# Jalankan dengan laporan cakupan kode
+# Run tests with test coverage reporting
 pytest --cov=src --cov-report=term-missing
 ```
 
 ---
 
-## 📂 Struktur Proyek
+## 📂 Project Structure
 
 ```
 sqlite-mcp-server/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml              # CI pengujian otomatis multi-OS (Linux & Windows)
-│       └── publish.yml         # Otomatisasi rilis paket ke PyPI
+│       ├── ci.yml              # Multi-OS CI testing (Linux & Windows)
+│       └── publish.yml         # Automated PyPI release workflow
 ├── src/
-│   ├── __init__.py             # Informasi paket & versi
-│   └── server.py               # Server FastMCP, alat, resources, prompts & validasi SQL
+│   ├── __init__.py             # Package version & metadata
+│   └── server.py               # FastMCP server, tools, resources, prompts & SQL validation
 ├── tests/
-│   └── test_server.py          # 29 pengujian unit & integrasi pytest
-├── .gitignore                  # Filter berkas Git
-├── LICENSE                     # Lisensi resmi MIT
-├── pyproject.toml              # Metadata proyek & konfigurasi build
-├── README.md                   # Dokumentasi lengkap & panduan integrasi
-└── requirements.txt            # Daftar pustaka dependensi
+│   └── test_server.py          # 29 unit & integration pytest tests
+├── .gitignore                  # Git ignore rules
+├── LICENSE                     # Official MIT License
+├── pyproject.toml              # Build system, CLI entrypoint, & package metadata
+├── README.md                   # Project documentation & configuration guide
+└── requirements.txt            # Python dependencies
 ```
 
 ---
 
-## 📄 Lisensi
+## 📄 License
 
-Proyek ini dilisensikan di bawah [Lisensi MIT](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
