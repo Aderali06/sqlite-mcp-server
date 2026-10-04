@@ -32,6 +32,16 @@ except ImportError:
                     return func
                 return decorator
 
+            def resource(self, *args: Any, **kwargs: Any) -> Any:
+                def decorator(func: Any) -> Any:
+                    return func
+                return decorator
+
+            def prompt(self, *args: Any, **kwargs: Any) -> Any:
+                def decorator(func: Any) -> Any:
+                    return func
+                return decorator
+
             def run(self, *args: Any, **kwargs: Any) -> None:
                 raise RuntimeError("The 'mcp' package is required to run server. Run: pip install mcp")
 
@@ -206,7 +216,7 @@ def get_connection(db_path: str | None = None) -> tuple[sqlite3.Connection | Non
         # Use SQLite URI mode to open in read-only mode (mode=ro)
         # On Windows, Path.as_uri() handles drive letters correctly
         db_uri = f"{path.as_uri()}?mode=ro"
-        conn = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
+        conn = sqlite3.connect(db_uri, uri=True, timeout=10.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
 
         # Extra safety enforcement at the engine level
@@ -428,10 +438,21 @@ def execute_get_database_schema(db_path: str | None = None) -> dict[str, Any]:
 def execute_read_query(
     query: str,
     params: list[Any] | None = None,
+    max_rows: int = 1000,
     db_path: str | None = None,
 ) -> dict[str, Any]:
-    """Safely execute a read-only SELECT query and return structured results."""
-    # 1. Static validation of query string
+    """Safely execute a read-only SELECT query and return structured results with row limit."""
+    # 1. Validate max_rows parameter
+    if max_rows < 1:
+        return {
+            "success": False,
+            "error_type": "ValidationError",
+            "message": "Parameter 'max_rows' must be a positive integer (>= 1).",
+            "query": query,
+            "suggestion": "Specify a positive integer for max_rows (e.g., 100 or 1000).",
+        }
+
+    # 2. Static validation of query string
     is_valid, error_msg, suggestion = validate_read_only_query(query)
     if not is_valid:
         return {
@@ -442,7 +463,7 @@ def execute_read_query(
             "suggestion": suggestion or "Only read-only SELECT queries are allowed.",
         }
 
-    # 2. Establish read-only connection
+    # 3. Establish read-only connection
     conn, err = get_connection(db_path)
     if err:
         return err
@@ -455,18 +476,32 @@ def execute_read_query(
 
         # Retrieve column names
         columns = [desc[0] for desc in cursor.description] if cursor.description else []
-        rows_data = cursor.fetchall()
+
+        # Fetch up to max_rows + 1 to detect if results exceed the limit
+        rows_data = cursor.fetchmany(max_rows + 1)
+        truncated = len(rows_data) > max_rows
+        if truncated:
+            rows_data = rows_data[:max_rows]
 
         # Convert sqlite3.Row objects to serializable dicts
         rows = [dict(row) for row in rows_data]
 
-        return {
+        response: dict[str, Any] = {
             "success": True,
             "query": query,
             "columns": columns,
             "row_count": len(rows),
             "rows": rows,
+            "truncated": truncated,
         }
+
+        if truncated:
+            response["warning"] = (
+                f"Results truncated to {max_rows} rows to prevent context window overflow. "
+                "Use LIMIT and OFFSET in your SQL query for pagination."
+            )
+
+        return response
     except sqlite3.OperationalError as ex:
         err_str = str(ex)
         error_type = "SyntaxError"
@@ -540,6 +575,7 @@ def get_database_schema(db_path: str | None = None) -> dict[str, Any]:
 def read_query(
     query: str,
     params: list[Any] | None = None,
+    max_rows: int = 1000,
     db_path: str | None = None,
 ) -> dict[str, Any]:
     """Execute a safe, read-only SELECT query against the SQLite database.
@@ -547,9 +583,73 @@ def read_query(
     Args:
         query: The SQL SELECT query to execute. Mutation queries (INSERT, UPDATE, DELETE, DROP, etc.) are strictly rejected.
         params: Optional list of query parameters for prepared statements (? placeholders).
+        max_rows: Maximum number of rows to return (default: 1000). Protects against context overflow.
         db_path: Optional path to SQLite file. If omitted, uses default database path.
     """
-    return execute_read_query(query=query, params=params, db_path=db_path)
+    return execute_read_query(query=query, params=params, max_rows=max_rows, db_path=db_path)
+
+
+# ---------------------------------------------------------------------------
+# FastMCP Resources (Direct Context Access for AI Clients)
+# ---------------------------------------------------------------------------
+
+@mcp.resource("sqlite://schema")
+def database_schema_resource() -> str:
+    """Resource providing the full SQLite database DDL schema."""
+    schema_info = execute_get_database_schema()
+    if not schema_info.get("success"):
+        return f"-- Failed to retrieve schema: {schema_info.get('message')}"
+
+    lines = [f"-- Database Schema: {schema_info.get('database')}", ""]
+    for item in schema_info.get("schema", []):
+        lines.append(f"{item['sql']};")
+        lines.append("")
+    return "\n".join(lines)
+
+
+@mcp.resource("sqlite://tables")
+def table_list_resource() -> str:
+    """Resource listing all tables and views with row counts."""
+    tables_info = execute_list_tables()
+    if not tables_info.get("success"):
+        return f"-- Failed to list tables: {tables_info.get('message')}"
+
+    lines = [f"-- Tables in: {tables_info.get('database')}", ""]
+    for t in tables_info.get("tables", []):
+        count_str = f" ({t['row_count']} rows)" if t["row_count"] is not None else ""
+        lines.append(f"- {t['name']} [{t['type']}]{count_str}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# FastMCP Prompts (Predefined Guided Templates for AI Assistants)
+# ---------------------------------------------------------------------------
+
+@mcp.prompt()
+def schema_analysis() -> str:
+    """Prompt for analyzing database structure, table relationships, and optimization opportunities."""
+    return (
+        "Please analyze the connected SQLite database schema. "
+        "Review table relationships, primary keys, foreign keys, and indexes. "
+        "Suggest useful queries or identify missing indexes if applicable."
+    )
+
+
+@mcp.prompt()
+def safe_query_assistant(user_goal: str) -> str:
+    """Prompt to assist in drafting safe, optimized SELECT queries for a specific goal.
+
+    Args:
+        user_goal: Description of what data the user wants to retrieve.
+    """
+    return (
+        f"Goal: {user_goal}\n\n"
+        "Draft a safe, read-only SELECT query for this SQLite database. "
+        "Follow these rules:\n"
+        "1. Use explicit column names instead of SELECT * when possible.\n"
+        "2. Include appropriate LIMIT and OFFSET clauses for large tables.\n"
+        "3. Only read queries are allowed; avoid any data modification statements."
+    )
 
 
 def main() -> None:

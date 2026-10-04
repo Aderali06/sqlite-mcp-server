@@ -9,11 +9,15 @@ from typing import Generator
 import pytest
 
 from src.server import (
+    database_schema_resource,
     execute_describe_table,
     execute_get_database_schema,
     execute_list_tables,
     execute_read_query,
+    safe_query_assistant,
+    schema_analysis,
     strip_sql_comments,
+    table_list_resource,
     validate_read_only_query,
 )
 
@@ -292,6 +296,32 @@ class TestReadQuery:
         assert result["success"] is False
         assert result["error_type"] == "DatabaseNotFoundError"
 
+    def test_max_rows_truncation(self, sample_db: str) -> None:
+        # Sample DB has 3 employees. Set max_rows=2 to verify truncation
+        query = "SELECT * FROM employees ORDER BY id ASC;"
+        result = execute_read_query(query, max_rows=2, db_path=sample_db)
+
+        assert result["success"] is True
+        assert result["row_count"] == 2
+        assert result["truncated"] is True
+        assert "warning" in result
+        assert "LIMIT and OFFSET" in result["warning"]
+
+    def test_max_rows_no_truncation(self, sample_db: str) -> None:
+        query = "SELECT * FROM employees ORDER BY id ASC;"
+        result = execute_read_query(query, max_rows=10, db_path=sample_db)
+
+        assert result["success"] is True
+        assert result["row_count"] == 3
+        assert result["truncated"] is False
+        assert "warning" not in result
+
+    def test_invalid_max_rows(self, sample_db: str) -> None:
+        result = execute_read_query("SELECT 1;", max_rows=0, db_path=sample_db)
+        assert result["success"] is False
+        assert result["error_type"] == "ValidationError"
+        assert "max_rows" in result["message"]
+
 
 class TestDatabaseResolution:
     """Test resolution of database path via arguments and environment variables."""
@@ -315,3 +345,30 @@ class TestDatabaseResolution:
         assert result["type"] == "view"
         col_names = [c["name"] for c in result["columns"]]
         assert "department_name" in col_names
+
+
+class TestMcpResourcesAndPrompts:
+    """Test MCP Resource and Prompt generators."""
+
+    def test_schema_resource(self, monkeypatch: pytest.MonkeyPatch, sample_db: str) -> None:
+        monkeypatch.setenv("SQLITE_DB_PATH", sample_db)
+        content = database_schema_resource()
+        assert "-- Database Schema:" in content
+        assert "CREATE TABLE departments" in content
+        assert "CREATE TABLE employees" in content
+
+    def test_tables_resource(self, monkeypatch: pytest.MonkeyPatch, sample_db: str) -> None:
+        monkeypatch.setenv("SQLITE_DB_PATH", sample_db)
+        content = table_list_resource()
+        assert "-- Tables in:" in content
+        assert "employees" in content
+        assert "departments" in content
+
+    def test_schema_analysis_prompt(self) -> None:
+        prompt_text = schema_analysis()
+        assert "analyze the connected SQLite database schema" in prompt_text
+
+    def test_safe_query_assistant_prompt(self) -> None:
+        prompt_text = safe_query_assistant("Find highest earning employees")
+        assert "Goal: Find highest earning employees" in prompt_text
+        assert "SELECT" in prompt_text
