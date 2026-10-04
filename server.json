@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schema/server.json",
+  "name": "sqlite-mcp-server",
+  "description": "Safe, read-only SQLite MCP server with automated schema discovery, context overflow row limits, and structured AI error handling.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Aderali06/sqlite-mcp-server.git"
+  },
+  "keywords": [
+    "sqlite",
+    "mcp",
+    "model-context-protocol",
+    "database",
+    "read-only",
+    "claude",
+    "cursor"
+  ],
+  "packages": [
+    {
+      "registry": "pypi",
+      "package": "sqlite-mcp-server",
+      "transport": "stdio",
+      "command": "sqlite-mcp-server",
+      "args": [
+        "--db-path",
+        "<PATH_TO_SQLITE_DB>"
+      ]
+    }
+  ]
+}
