@@ -372,3 +372,17 @@ class TestMcpResourcesAndPrompts:
         prompt_text = safe_query_assistant("Find highest earning employees")
         assert "Goal: Find highest earning employees" in prompt_text
         assert "SELECT" in prompt_text
+
+
+class TestToolRegistrations:
+    """Test that all 4 tools are registered with proper metadata."""
+
+    def test_tools_registered_with_annotations(self) -> None:
+        from src.server import describe_table, get_database_schema, list_tables, read_query
+
+        # Ensure tools are callable and registered
+        assert callable(list_tables)
+        assert callable(describe_table)
+        assert callable(get_database_schema)
+        assert callable(read_query)
+

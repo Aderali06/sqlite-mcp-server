@@ -3,6 +3,8 @@
 An open-source [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server connecting LLM assistants (such as **Claude Desktop** and **Cursor**) to **local SQLite databases** with strict read-only security, context overflow protection, and structured AI error handling.
 
 [![CI](https://github.com/Aderali06/sqlite-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Aderali06/sqlite-mcp-server/actions)
+[![M8ven Trust](https://m8ven.ai/badge/mcp/aderali06/sqlite-mcp-server)](https://m8ven.ai/mcp/aderali06/sqlite-mcp-server?s=readme)
+[![Glama Score](https://glama.ai/mcp/servers/Aderali06/sqlite-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/Aderali06/sqlite-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 

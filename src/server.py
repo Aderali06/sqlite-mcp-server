@@ -27,7 +27,7 @@ except ImportError:
             def __init__(self, *args: Any, **kwargs: Any) -> None:
                 pass
 
-            def tool(self) -> Any:
+            def tool(self, *args: Any, **kwargs: Any) -> Any:
                 def decorator(func: Any) -> Any:
                     return func
                 return decorator
@@ -537,10 +537,33 @@ def execute_read_query(
 
 
 # ---------------------------------------------------------------------------
-# FastMCP Tool Registrations
+# FastMCP Tool Registrations with Tool Annotations
 # ---------------------------------------------------------------------------
 
-@mcp.tool()
+try:
+    from mcp.types import ToolAnnotations
+
+    READ_ONLY_TOOL_ANNOTATIONS: ToolAnnotations | None = ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+except ImportError:
+    READ_ONLY_TOOL_ANNOTATIONS = None
+
+
+def register_tool(**kwargs: Any) -> Any:
+    """Register an MCP tool with backward-compatible annotation support."""
+    filtered = {k: v for k, v in kwargs.items() if v is not None}
+    try:
+        return mcp.tool(**filtered)
+    except TypeError:
+        filtered.pop("annotations", None)
+        return mcp.tool(**filtered)
+
+
+@register_tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
 def list_tables(db_path: str | None = None) -> dict[str, Any]:
     """List all user tables and views in the SQLite database with their row count.
 
@@ -550,7 +573,7 @@ def list_tables(db_path: str | None = None) -> dict[str, Any]:
     return execute_list_tables(db_path=db_path)
 
 
-@mcp.tool()
+@register_tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
 def describe_table(table_name: str, db_path: str | None = None) -> dict[str, Any]:
     """Get detailed schema information for a specific table or view, including columns, primary keys, foreign keys, and indexes.
 
@@ -561,7 +584,7 @@ def describe_table(table_name: str, db_path: str | None = None) -> dict[str, Any
     return execute_describe_table(table_name=table_name, db_path=db_path)
 
 
-@mcp.tool()
+@register_tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
 def get_database_schema(db_path: str | None = None) -> dict[str, Any]:
     """Get the full CREATE DDL statements and schema definitions for all tables, views, and indexes.
 
@@ -571,7 +594,7 @@ def get_database_schema(db_path: str | None = None) -> dict[str, Any]:
     return execute_get_database_schema(db_path=db_path)
 
 
-@mcp.tool()
+@register_tool(annotations=READ_ONLY_TOOL_ANNOTATIONS)
 def read_query(
     query: str,
     params: list[Any] | None = None,
